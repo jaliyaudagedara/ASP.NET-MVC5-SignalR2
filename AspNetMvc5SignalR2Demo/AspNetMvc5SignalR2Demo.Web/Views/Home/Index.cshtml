@@ -1,0 +1,162 @@
+﻿@{
+    ViewBag.Title = "ASP.NET SignalR";
+}
+<h2>ASP.NET SignalR</h2>
+
+<div class="container">
+    <div class="form-group">
+        <button class="btn btn-default" type="button" id="btnConnect">Connect</button>
+        <button class="btn btn-default" type="button" id="btnDisconnect">Disconnect</button>
+    </div>
+
+    <div class="form-group">
+        <label>Group Name</label>
+        <input class="form-control" type="text" id="txtGroupName" value="SignalR Fans" disabled />
+
+        <button class="btn btn-default" type="button" id="btnJoinGroup">Join Group</button>
+        <button class="btn btn-default" type="button" id="btnLeaveGroup">Leave Group</button>
+    </div>
+
+    <div class="form-group">
+        <label>Display Name</label>
+        <input class="form-control" type="text" id="txtDisplayName" disabled />
+    </div>
+
+    <div class="form-group">
+        <label>Connection ID</label>
+        <input class="form-control" type="text" id="txtConnectionId" disabled />
+    </div>
+
+    <div class="form-group">
+        <label>Message</label>
+        <input class="form-control" type="text" id="txtMessage" />
+    </div>
+
+    <div class="form-group">
+        <div class="input-group radio-inline-group">
+            <label class="radio-inline"><input type="radio" name="optradio" value="All" checked>All</label>
+            <label class="radio-inline"><input type="radio" name="optradio" value="ConnectionID">Connection ID</label>
+            <label class="radio-inline"><input type="radio" name="optradio" value="Group">Group</label>
+        </div>
+    </div>
+
+    <div class="form-group" id="divConnectionIds" hidden>
+        <label>Connection IDs</label>
+        <select class="form-control" id="ddlConnectionIds"></select>
+    </div>
+
+    <div class="form-group">
+        <button class="btn btn-default" type="button" id="btnSend">Send</button>
+    </div>
+
+    <div class="form-group">
+        <button class="btn btn-default" type="button" id="btnGet">Get</button>
+        <button class="btn btn-default" type="button" id="btnInvoke">Invoke</button>
+    </div>
+
+    <div class="form-group">
+        <label>Messages</label>
+        <ul id="messages"></ul>
+    </div>
+</div>
+
+@section scripts {
+    <script src="~/Scripts/jquery.signalR-2.2.2.min.js"></script>
+    <script src="~/api/signalr/hubs"></script>
+
+    <script>
+        $(function () {
+            var myHub = $.connection.myHub;
+
+            myHub.client.addNewMessageToPage = addNewMessageToPage;
+            myHub.client.updateConnectedIds = updateConnectedIds;
+
+            $('#btnConnect').click(function () {
+                if ($('#txtDisplayName').val() === "") {
+                    $('#txtDisplayName').val(prompt('Enter your name:', ''));
+                }
+
+                if ($('#txtDisplayName').val() !== "") {
+                    $.connection.hub.start().done(function () {
+                        $('#txtConnectionId').val($.connection.hub.id);
+
+                        myHub.server.sendToAll($('#txtDisplayName').val(), "Connected.");
+                    });
+                }
+            });
+
+            $('#btnDisconnect').click(function () {
+                myHub.server.sendToOthers($('#txtDisplayName').val(), "Disconnected.");
+
+                $.connection.hub.stop();
+                $('#txtConnectionId').val("");
+
+                addNewMessageToPage($('#txtDisplayName').val(), "Disconnected.");
+                $('#connections').empty();
+            });
+
+            $('#btnSend').click(function () {
+                var selectedMode = $("input:radio[name='optradio']:checked").val();
+
+                if (selectedMode == "All") {
+                    myHub.server.sendToAll($('#txtDisplayName').val(), $('#txtMessage').val());
+                }
+                else if (selectedMode == "ConnectionID") {
+                    var selectedConnectionId = $("#ddlConnectionIds option:selected").text();
+                    myHub.server.sendToConnectionId(selectedConnectionId, $('#txtDisplayName').val(), $('#txtMessage').val());
+                }
+                else if (selectedMode == "Group") {
+                    myHub.server.sendToGroup($('#txtGroupName').val(), $('#txtDisplayName').val(), $('#txtMessage').val());
+                }
+            });
+
+            $('#btnJoinGroup').click(function () {
+                myHub.server.joinGroup($('#txtGroupName').val(), $('#txtDisplayName').val());
+            });
+
+            $('#btnLeaveGroup').click(function () {
+                myHub.server.leaveGroup($('#txtGroupName').val(), $('#txtDisplayName').val());
+            });
+
+            $('#btnInvoke').click(function () {
+                $.post("api/values", function (result) { });
+            });
+
+            $('#btnGet').click(function () {
+                myHub.server.getSomeStrings()
+                   .done(function (strings) {
+                       addNewMessageToPage("SYSTEM", strings);
+                   })
+                   .fail(function (error) {
+                       console.log(error);
+                   });
+            });
+
+            $(".radio-inline-group :input").change(function () {
+                if ($(this).val() == "ConnectionID") {
+                    $('#divConnectionIds').removeAttr('hidden');
+                }
+                else {
+                    $('#divConnectionIds').attr('hidden', true);
+                }
+            });
+
+            function addNewMessageToPage(name, message) {
+                $('#messages').append('<li><strong>' + htmlEncode(name) + '</strong> (' + new Date().toLocaleString() + '): ' + htmlEncode(message) + '</li>');
+            }
+
+            function updateConnectedIds(connectionIds) {
+                $("#ddlConnectionIds").empty();
+
+                $.each(connectionIds, function (key, value) {
+                    $('#ddlConnectionIds').append($("<option></option>").attr("value", key).text(value));
+                });
+            }
+
+            function htmlEncode(value) {
+                var encodedValue = $('<div />').text(value).html();
+                return encodedValue;
+            }
+        });
+    </script>
+}
